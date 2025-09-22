@@ -116,28 +116,39 @@
 
         for (const record of event.message.records) {
           try {
-            switch (record.recordType) {
-              case "text":
-                const textDecoder = new TextDecoder(record.encoding || "utf-8");
-                dataStr = textDecoder.decode(record.data);
-                break;
-              case "url":
-              case "mime":
-              case "unknown":
-                if(record.data instanceof ArrayBuffer){
-                  dataStr = Array.from(new Uint8Array(record.data))
-                                .map(b => b.toString(16).padStart(2,"0"))
-                                .join("").toUpperCase();
-                }
-                break;
+            // Text record
+            if (record.recordType === "text") {
+              const decoder = new TextDecoder(record.encoding || "utf-8");
+              if (record.data instanceof DataView) {
+                dataStr = decoder.decode(record.data.buffer);
+              } else if (record.data instanceof ArrayBuffer) {
+                dataStr = decoder.decode(record.data);
+              } else if (typeof record.data === "string") {
+                dataStr = record.data;
+              }
+            } 
+            // URL / MIME / Unknown
+            else if (["url", "mime", "unknown"].includes(record.recordType)) {
+              let buffer;
+              if (record.data instanceof DataView) buffer = record.data.buffer;
+              else if (record.data instanceof ArrayBuffer) buffer = record.data;
+              else continue;
+
+              dataStr = Array.from(new Uint8Array(buffer))
+                             .map(b => b.toString(16).padStart(2,"0"))
+                             .join("").toUpperCase();
             }
+
+            // Filter non-hex/decimal characters
+            dataStr = dataStr.replace(/[^0-9A-Fa-f]/g, "");
+
           } catch(e){
             console.error("Error decoding NFC record:", e);
           }
         }
 
-        if(dataStr){
-          hexInput.value = dataStr.trim();
+        if(dataStr.length > 0) {
+          hexInput.value = dataStr;
           convertValue(dataStr);
           setError("NFC tag read and converted automatically.");
         } else {
