@@ -33,9 +33,7 @@
   const resultDiv = document.getElementById('result');
   const errorDiv = document.getElementById('error');
 
-  function setError(msg) {
-    errorDiv.textContent = msg;
-  }
+  function setError(msg) { errorDiv.textContent = msg; }
 
   function convert() {
     const hex = hexInput.value.trim();
@@ -56,7 +54,7 @@
 
   document.getElementById("convertBtn").addEventListener("click", convert);
 
-  // NFC Integration
+  // NFC Integration (extended for text, URL, MIME)
   async function startNFC() {
     if (!("NDEFReader" in window)) {
       setError("Web NFC not supported on this device/browser.");
@@ -66,18 +64,19 @@
       const ndef = new NDEFReader();
       await ndef.scan();
       setError("Hold an NFC tag near your device...");
+
       ndef.onreading = event => {
         let hexData = "";
         for (const record of event.message.records) {
           if (record.recordType === "text") {
             hexData = new TextDecoder().decode(record.data);
-          } else {
+          } else if (record.recordType === "url" || record.recordType === "mime" || record.recordType === "unknown") {
             hexData = Array.from(new Uint8Array(record.data))
               .map(b => b.toString(16).padStart(2,"0"))
               .join("").toUpperCase();
           }
         }
-        if (hexData) {
+        if(hexData){
           hexInput.value = hexData;
           convert();
           setError("NFC tag read successfully.");
