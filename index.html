@@ -1,196 +1,196 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Access Card NFC Hex & Decimal Converter with History</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 2em; background: #f4f4f9; }
-    h1 { text-align: center; }
-    .container { max-width: 700px; margin: auto; padding: 20px; background: #fff;
-                 border-radius: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
-    input { width: 100%; padding: 10px; margin: 10px 0; font-size: 1em; }
-    button { padding: 10px 20px; margin: 10px 5px 0 0; font-size: 1em;
-             border-radius: 8px; border: none; cursor: pointer; }
-    #convertBtn { background: #007BFF; color: white; }
-    #scanNFCBtn { background: #28a745; color: white; }
-    #copyBtn { background: #ffc107; color: black; display: none; }
-    #result, #history { margin-top: 15px; padding: 10px; background: #eef; border-radius: 8px; word-break: break-word; }
-    #error { color: red; margin-top: 10px; word-break: break-word; }
-    #history h2 { margin-top: 0; }
-    .history-entry { margin-bottom: 8px; padding: 6px; border-bottom: 1px solid #ccc; font-size: 0.95em; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Access Card NFC Converter with Full UID & Excel Export</title>
+<style>
+  body { font-family: Arial, sans-serif; margin: 2em; background: #f4f4f9; }
+  h1 { text-align: center; }
+  .container { max-width: 700px; margin: auto; padding: 20px; background: #fff;
+               border-radius: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
+  input { width: 100%; padding: 10px; margin: 10px 0; font-size: 1em; }
+  button { padding: 10px 20px; margin: 10px 5px 0 0; font-size: 1em;
+           border-radius: 8px; border: none; cursor: pointer; }
+  #convertBtn { background: #007BFF; color: white; }
+  #scanNFCBtn { background: #28a745; color: white; }
+  #copyBtn { background: #ffc107; color: black; display: none; }
+  #exportBtn { background: #6f42c1; color: white; }
+  #result, #history { margin-top: 15px; padding: 10px; background: #eef; border-radius: 8px; word-break: break-word; }
+  #error { color: red; margin-top: 10px; word-break: break-word; }
+  #history h2 { margin-top: 0; }
+  #historyList { max-height: 300px; overflow-y: auto; }
+  .history-entry { margin-bottom: 8px; padding: 6px; border-bottom: 1px solid #ccc; font-size: 0.95em; }
+</style>
 </head>
 <body>
-  <div class="container">
-    <h1>Access Card NFC Hex & Decimal Converter</h1>
-    <input type="text" id="hexInput" placeholder="Enter Hex or Decimal value"/>
-    <button id="convertBtn">Convert</button>
-    <button id="scanNFCBtn">Scan NFC</button>
-    <button id="copyBtn">Copy Decimal</button>
-    <div id="result"></div>
-    <div id="error"></div>
+<div class="container">
+  <h1>Access Card NFC Converter with Full UID & Excel Export</h1>
+  <input type="text" id="hexInput" placeholder="Enter Hex or Decimal value"/>
+  <button id="convertBtn">Convert</button>
+  <button id="scanNFCBtn">Scan NFC</button>
+  <button id="copyBtn">Copy Decimal</button>
+  <button id="exportBtn">Export to Excel</button>
+  <div id="result"></div>
+  <div id="error"></div>
 
-    <div id="history">
-      <h2>Scan History</h2>
-      <div id="historyList"></div>
-      <button id="clearHistoryBtn">Clear History</button>
-    </div>
+  <div id="history">
+    <h2>Scan History</h2>
+    <div id="historyList"></div>
+    <button id="clearHistoryBtn">Clear History</button>
   </div>
+</div>
 
 <script>
-  const hexInput = document.getElementById('hexInput');
-  const resultDiv = document.getElementById('result');
-  const errorDiv = document.getElementById('error');
-  const copyBtn = document.getElementById('copyBtn');
-  const historyList = document.getElementById('historyList');
-  const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+const hexInput = document.getElementById('hexInput');
+const resultDiv = document.getElementById('result');
+const errorDiv = document.getElementById('error');
+const copyBtn = document.getElementById('copyBtn');
+const exportBtn = document.getElementById('exportBtn');
+const historyList = document.getElementById('historyList');
+const clearHistoryBtn = document.getElementById('clearHistoryBtn');
 
-  let clearTimeoutId = null;
+let clearTimeoutId = null;
+let scanHistory = []; // store history for export
 
-  function setError(msg) { errorDiv.textContent = msg; }
-  function clearResult() { 
-    resultDiv.innerHTML = ""; 
-    copyBtn.style.display = "none"; 
-    if(clearTimeoutId) { clearTimeout(clearTimeoutId); clearTimeoutId = null; }
+function setError(msg){ errorDiv.textContent = msg; }
+function clearResult(){ 
+  resultDiv.innerHTML=""; copyBtn.style.display="none"; 
+  if(clearTimeoutId){ clearTimeout(clearTimeoutId); clearTimeoutId=null; }
+}
+function autoClear(){
+  clearTimeoutId = setTimeout(()=>{
+    hexInput.value=""; clearResult(); setError("");
+  },5000);
+}
+function formatTo10Digits(decimalStr){ return decimalStr.padStart(10,'0'); }
+
+function addToHistory(uidStr, hexStr, decStr){
+  const now = new Date();
+  const timestamp = now.toLocaleTimeString();
+  const entryDiv = document.createElement("div");
+  entryDiv.className = "history-entry";
+  entryDiv.innerHTML = `<b>UID:</b> ${uidStr} &nbsp; | &nbsp; <b>Hex:</b> ${hexStr} &nbsp; | &nbsp; <b>Decimal:</b> ${decStr} &nbsp; | &nbsp; <b>Time:</b> ${timestamp}`;
+  historyList.prepend(entryDiv);
+
+  scanHistory.push({ UID: uidStr, Hex: hexStr, Decimal: decStr, Time: timestamp });
+}
+
+clearHistoryBtn.addEventListener("click",()=>{
+  historyList.innerHTML=""; scanHistory=[];
+});
+
+function convertValue(value){
+  clearResult();
+  value=value.trim();
+  if(!value){ setError("No value to convert."); return; }
+
+  try{
+    let dec, hexStr;
+    if(/^[0-9A-Fa-f]+$/.test(value)){
+      hexStr = value.toUpperCase(); dec=BigInt("0x"+value);
+    } else if(/^[0-9]+$/.test(value)){
+      dec=BigInt(value); hexStr=dec.toString(16).toUpperCase();
+    } else {
+      hexStr=Array.from(value).map(c=>c.charCodeAt(0).toString(16).padStart(2,'0')).join("").toUpperCase();
+      dec=BigInt("0x"+hexStr);
+    }
+
+    let decStr = formatTo10Digits(dec.toString());
+    resultDiv.innerHTML = `Hex: <b>${hexStr}</b><br/>Decimal (10-digit): <b>${decStr}</b>`;
+    copyBtn.style.display="inline-block";
+    addToHistory(hexStr, hexStr, decStr);
+    setError(""); autoClear();
+  } catch(err){ setError("Conversion error: "+err.message); }
+}
+
+document.getElementById("convertBtn").addEventListener("click",()=>convertValue(hexInput.value));
+
+copyBtn.addEventListener("click",()=>{
+  if(resultDiv.textContent){
+    const decimalValue=resultDiv.textContent.match(/\d+/)[0];
+    navigator.clipboard.writeText(decimalValue).then(()=>{ setError("Decimal copied!"); autoClear(); })
+      .catch(err=>setError("Copy failed: "+err));
   }
+});
 
-  function autoClear() {
-    clearTimeoutId = setTimeout(() => {
-      hexInput.value = "";
-      clearResult();
-      setError("");
-    }, 5000);
-  }
+function bytesToHex(buffer){
+  const u8 = new Uint8Array(buffer);
+  return Array.from(u8).map(b=>b.toString(16).padStart(2,'0')).join('').toUpperCase();
+}
 
-  function formatTo10Digits(decimalStr) {
-    return decimalStr.padStart(10,'0');
-  }
+async function startNFC(){
+  clearResult(); setError("");
 
-  function addToHistory(hexStr, decStr) {
-    const now = new Date();
-    const timestamp = now.toLocaleTimeString();
-    const entryDiv = document.createElement("div");
-    entryDiv.className = "history-entry";
-    entryDiv.innerHTML = `<b>Hex:</b> ${hexStr} &nbsp; | &nbsp; <b>Decimal:</b> ${decStr} &nbsp; | &nbsp; <b>Time:</b> ${timestamp}`;
-    historyList.prepend(entryDiv);
-  }
+  if(!("NDEFReader" in window)){ setError("Web NFC not supported on this device/browser."); return; }
 
-  clearHistoryBtn.addEventListener("click", () => {
-    historyList.innerHTML = "";
-  });
+  try{
+    const ndef = new NDEFReader();
+    await ndef.scan();
+    setError("Hold an NFC tag near your device...");
 
-  function convertValue(value) {
-    clearResult();
-    value = value.trim();
-    if (!value) { setError("No value to convert."); return; }
+    ndef.onreadingerror = ()=>setError("Failed to read NFC tag.");
 
-    try {
-      let dec;
-      let hexStr;
+    ndef.onreading = event=>{
+      let hexStr="", uidStr="";
 
-      if (/^[0-9A-Fa-f]+$/.test(value)) {
-        hexStr = value.toUpperCase();
-        dec = BigInt("0x" + value);
-      } else if (/^[0-9]+$/.test(value)) {
-        dec = BigInt(value);
-        hexStr = dec.toString(16).toUpperCase();
+      if(event.serialNumber){
+        uidStr = event.serialNumber.toUpperCase();
+        hexStr = uidStr;
       } else {
-        hexStr = Array.from(value)
-                       .map(c => c.charCodeAt(0).toString(16).padStart(2,'0'))
-                       .join("").toUpperCase();
-        dec = BigInt("0x" + hexStr);
+        for(const record of event.message.records){
+          if(!record.data) continue;
+          let buffer=null;
+          if(record.data instanceof ArrayBuffer) buffer=record.data;
+          else if(record.data instanceof DataView) buffer=record.data.buffer;
+          else continue;
+
+          const u8 = new Uint8Array(buffer);
+          hexStr = bytesToHex(u8);
+          uidStr = hexStr; // use full hex as UID for long cards
+        }
       }
 
-      let decStr = dec.toString();
-      decStr = formatTo10Digits(decStr);
-
-      resultDiv.innerHTML = `Hex: <b>${hexStr}</b><br/>Decimal (10-digit): <b>${decStr}</b>`;
-      copyBtn.style.display = "inline-block";
-
-      addToHistory(hexStr, decStr);
-
-      setError("");
-      autoClear();
-    } catch (err) {
-      setError("Conversion error: " + err.message);
-    }
-  }
-
-  document.getElementById("convertBtn").addEventListener("click", () => convertValue(hexInput.value));
-
-  copyBtn.addEventListener("click", () => {
-    if (resultDiv.textContent) {
-      const decimalValue = resultDiv.textContent.match(/\d+/)[0];
-      navigator.clipboard.writeText(decimalValue).then(() => {
-        setError("Decimal copied to clipboard!");
+      if(hexStr.length>0){
+        hexInput.value=hexStr;
+        const decValue=formatTo10Digits(BigInt("0x"+hexStr).toString());
+        resultDiv.innerHTML=`Hex: <b>${hexStr}</b><br/>Decimal (10-digit): <b>${decValue}</b>`;
+        copyBtn.style.display="inline-block";
+        addToHistory(uidStr, hexStr, decValue);
+        setError("NFC tag read successfully.");
         autoClear();
-      }).catch(err => {
-        setError("Failed to copy: " + err);
-      });
-    }
+      } else {
+        setError("No usable UID/hex/decimal found in NFC tag.");
+      }
+    };
+
+  } catch(err){ setError("NFC Error: "+err.message+" (Ensure NFC is enabled and page is HTTPS)."); }
+}
+
+document.getElementById("scanNFCBtn").addEventListener("click", startNFC);
+
+// Export to Excel (CSV)
+exportBtn.addEventListener("click", ()=>{
+  if(scanHistory.length===0){ setError("No scan history to export."); return; }
+
+  const headers = ["UID","Hex","Decimal","Time"];
+  const csvRows = [headers.join(",")];
+
+  scanHistory.forEach(row=>{
+    const values = headers.map(h=>row[h]);
+    csvRows.push(values.join(","));
   });
 
-  function bytesToHex(buffer) {
-    const u8 = new Uint8Array(buffer);
-    return Array.from(u8).map(b => b.toString(16).padStart(2,'0')).join('').toUpperCase();
-  }
-
-  async function startNFC() {
-    clearResult();
-    setError("");
-
-    if (!("NDEFReader" in window)) {
-      setError("Web NFC not supported on this device/browser.");
-      return;
-    }
-
-    try {
-      const ndef = new NDEFReader();
-      await ndef.scan();
-      setError("Hold an NFC tag near your device...");
-
-      ndef.onreadingerror = () => setError("Failed to read NFC tag.");
-
-      ndef.onreading = event => {
-        let hexStr = "";
-
-        // 1️⃣ Use serialNumber first (clean card ID)
-        if(event.serialNumber) {
-          hexStr = event.serialNumber.toUpperCase();
-        } else {
-          // 2️⃣ Fallback: read record data as raw bytes
-          for (const record of event.message.records) {
-            try {
-              if(!record.data) continue;
-
-              if (record.data instanceof ArrayBuffer || record.data instanceof DataView) {
-                hexStr = bytesToHex(record.data);
-              }
-
-              hexStr = hexStr.replace(/[^0-9A-F]/g,"");
-
-            } catch(e){
-              console.error("Error decoding NFC record:", e);
-            }
-          }
-        }
-
-        if(hexStr.length > 0){
-          hexInput.value = hexStr;
-          convertValue(hexStr);
-          setError("NFC tag read successfully.");
-        } else {
-          setError("No usable hex, decimal, or access card ID found in NFC tag.");
-        }
-      };
-
-    } catch (err) {
-      setError("NFC Error: " + err.message + " (Ensure NFC is enabled and page is HTTPS).");
-    }
-  }
-
-  document.getElementById("scanNFCBtn").addEventListener("click", startNFC);
+  const csvContent = csvRows.join("\n");
+  const blob = new Blob([csvContent], {type:"text/csv"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "NFC_Scan_History.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+  setError("Scan history exported as CSV/Excel!");
+});
 </script>
 </body>
 </html>
