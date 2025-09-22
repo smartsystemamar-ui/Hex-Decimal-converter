@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Access Card NFC to Decimal Converter</title>
+  <title>Access Card NFC Hex & Decimal Converter with History</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 2em; background: #f4f4f9; }
     h1 { text-align: center; }
-    .container { max-width: 600px; margin: auto; padding: 20px; background: #fff;
+    .container { max-width: 700px; margin: auto; padding: 20px; background: #fff;
                  border-radius: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
     input { width: 100%; padding: 10px; margin: 10px 0; font-size: 1em; }
     button { padding: 10px 20px; margin: 10px 5px 0 0; font-size: 1em;
@@ -15,19 +15,26 @@
     #convertBtn { background: #007BFF; color: white; }
     #scanNFCBtn { background: #28a745; color: white; }
     #copyBtn { background: #ffc107; color: black; display: none; }
-    #result { margin-top: 15px; padding: 10px; background: #eef; border-radius: 8px; word-break: break-word; }
+    #result, #history { margin-top: 15px; padding: 10px; background: #eef; border-radius: 8px; word-break: break-word; }
     #error { color: red; margin-top: 10px; word-break: break-word; }
+    #history h2 { margin-top: 0; }
+    .history-entry { margin-bottom: 8px; padding: 6px; border-bottom: 1px solid #ccc; font-size: 0.95em; }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>Access Card NFC to Decimal Converter</h1>
+    <h1>Access Card NFC Hex & Decimal Converter</h1>
     <input type="text" id="hexInput" placeholder="Enter Hex or Decimal value"/>
     <button id="convertBtn">Convert</button>
     <button id="scanNFCBtn">Scan NFC</button>
     <button id="copyBtn">Copy Decimal</button>
     <div id="result"></div>
     <div id="error"></div>
+
+    <div id="history">
+      <h2>Scan History</h2>
+      <div id="historyList"></div>
+    </div>
   </div>
 
 <script>
@@ -35,6 +42,7 @@
   const resultDiv = document.getElementById('result');
   const errorDiv = document.getElementById('error');
   const copyBtn = document.getElementById('copyBtn');
+  const historyList = document.getElementById('historyList');
 
   let clearTimeoutId = null;
 
@@ -50,7 +58,20 @@
       hexInput.value = "";
       clearResult();
       setError("");
-    }, 5000); // 5 seconds
+    }, 5000);
+  }
+
+  function formatTo10Digits(decimalStr) {
+    return decimalStr.padStart(10,'0');
+  }
+
+  function addToHistory(hexStr, decStr) {
+    const now = new Date();
+    const timestamp = now.toLocaleTimeString();
+    const entryDiv = document.createElement("div");
+    entryDiv.className = "history-entry";
+    entryDiv.innerHTML = `<b>Hex:</b> ${hexStr} &nbsp; | &nbsp; <b>Decimal:</b> ${decStr} &nbsp; | &nbsp; <b>Time:</b> ${timestamp}`;
+    historyList.prepend(entryDiv);
   }
 
   function convertValue(value) {
@@ -60,29 +81,35 @@
 
     try {
       let dec;
+      let hexStr;
 
-      // If value looks like hex
+      // Hex input
       if (/^[0-9A-Fa-f]+$/.test(value)) {
+        hexStr = value.toUpperCase();
         dec = BigInt("0x" + value);
       } 
-      // If value is decimal
+      // Decimal input
       else if (/^[0-9]+$/.test(value)) {
         dec = BigInt(value);
+        hexStr = dec.toString(16).toUpperCase();
       } 
-      // If raw bytes (Akuvox 4–10 byte IDs)
+      // Raw bytes (access cards)
       else {
-        // Convert each char code to hex
-        const hexStr = Array.from(value).map(c => c.charCodeAt(0).toString(16).padStart(2,'0')).join('');
+        hexStr = Array.from(value)
+                       .map(c => c.charCodeAt(0).toString(16).padStart(2,'0'))
+                       .join("").toUpperCase();
         dec = BigInt("0x" + hexStr);
       }
 
-      let output = "Decimal: <b>" + dec.toString() + "</b>";
-      const len = dec.toString().length;
-      if (len === 8) output += "<br/>This is an <b>8-digit</b> decimal.";
-      else if (len === 10) output += "<br/>This is a <b>10-digit</b> decimal.";
+      let decStr = dec.toString();
+      decStr = formatTo10Digits(decStr); // force 10 digits
 
+      let output = "Hex: <b>" + hexStr + "</b><br/>Decimal (10-digit): <b>" + decStr + "</b>";
       resultDiv.innerHTML = output;
       copyBtn.style.display = "inline-block";
+
+      addToHistory(hexStr, decStr); // add to history
+
       setError("");
       autoClear();
     } catch (err) {
@@ -144,7 +171,7 @@
                              .join("").toUpperCase();
             }
 
-            // Filter non-hex/decimal characters
+            // Filter non-hex/decimal
             dataStr = dataStr.replace(/[^0-9A-Fa-f]/g,"");
 
           } catch(e){
