@@ -3,38 +3,35 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NFC UID Reader with Decimal Length & Excel Export</title>
+<title>NFC UID Reader with Full History & Excel Export</title>
 <style>
-  body { font-family: Arial, sans-serif; margin: 2em; background: #f4f4f9; }
-  h1 { text-align: center; }
-  .container { max-width: 700px; margin: auto; padding: 20px; background: #fff;
-               border-radius: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
-  button { padding: 10px 20px; margin: 10px 5px 0 0; font-size: 1em;
-           border-radius: 8px; border: none; cursor: pointer; }
-  #scanNFCBtn { background: #28a745; color: white; }
-  #copyBtn { background: #ffc107; color: black; display: none; }
-  #exportBtn { background: #6f42c1; color: white; }
-  #result, #history { margin-top: 15px; padding: 10px; background: #eef; border-radius: 8px; word-break: break-word; }
-  #error { color: red; margin-top: 10px; word-break: break-word; }
-  #history h2 { margin-top: 0; }
-  #historyList { max-height: 300px; overflow-y: auto; }
-  .history-entry { margin-bottom: 8px; padding: 6px; border-bottom: 1px solid #ccc; font-size: 0.95em; }
+body { font-family: Arial, sans-serif; margin: 2em; background: #f4f4f9; }
+.container { max-width: 700px; margin: auto; padding: 20px; background: #fff; border-radius: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
+button { padding: 10px 20px; margin: 10px 5px 0 0; font-size: 1em; border-radius: 8px; border: none; cursor: pointer; }
+#scanNFCBtn { background: #28a745; color: white; }
+#copyBtn { background: #ffc107; color: black; display: none; }
+#exportBtn { background: #6f42c1; color: white; }
+#result, #history { margin-top: 15px; padding: 10px; background: #eef; border-radius: 8px; word-break: break-word; }
+#error { color: red; margin-top: 10px; word-break: break-word; }
+#history h2 { margin-top: 0; }
+#historyList { max-height: 300px; overflow-y: auto; }
+.history-entry { margin-bottom: 8px; padding: 6px; border-bottom: 1px solid #ccc; font-size: 0.95em; }
 </style>
 </head>
 <body>
 <div class="container">
-  <h1>NFC UID Reader with Decimal Length & Excel Export</h1>
-  <button id="scanNFCBtn">Scan NFC Tag</button>
-  <button id="copyBtn">Copy Decimal</button>
-  <button id="exportBtn">Export History to Excel</button>
-  <div id="result"></div>
-  <div id="error"></div>
+<h1>NFC UID Reader with Full History</h1>
+<button id="scanNFCBtn">Scan NFC Tag</button>
+<button id="copyBtn">Copy Decimal</button>
+<button id="exportBtn">Export History to Excel</button>
+<div id="result"></div>
+<div id="error"></div>
 
-  <div id="history">
-    <h2>Scan History</h2>
-    <div id="historyList"></div>
-    <button id="clearHistoryBtn">Clear History</button>
-  </div>
+<div id="history">
+<h2>Scan History</h2>
+<div id="historyList"></div>
+<button id="clearHistoryBtn">Clear History</button>
+</div>
 </div>
 
 <script>
@@ -52,16 +49,23 @@ let lastDecimal = "";
 function setError(msg){ errorDiv.textContent = msg; }
 function clearResult(){ resultDiv.innerHTML=""; copyBtn.style.display="none"; }
 
-function formatTo10Digits(decimalStr){ return decimalStr.padStart(10,'0'); }
+function formatDecimal(decimalStr){
+  decimalStr = decimalStr.toString();
+  let note = "";
+  if(decimalStr.length === 8) note = " (8-digit)";
+  else if(decimalStr.length === 10) note = " (10-digit)";
+  return { dec: decimalStr, note: note };
+}
 
-function addToHistory(uidStr, decStr){
+function addToHistory(uidStr, decStr, note){
   const now = new Date();
   const timestamp = now.toLocaleTimeString();
   const entryDiv = document.createElement("div");
   entryDiv.className = "history-entry";
-  entryDiv.innerHTML = `<b>UID:</b> ${uidStr} &nbsp; | &nbsp; <b>Decimal:</b> ${decStr} &nbsp; | &nbsp; <b>Time:</b> ${timestamp}`;
+  entryDiv.innerHTML = `<b>UID (Hex):</b> ${uidStr} &nbsp; | &nbsp; <b>Decimal:</b> ${decStr}${note} &nbsp; | &nbsp; <b>Time:</b> ${timestamp}`;
   historyList.prepend(entryDiv);
-  scanHistory.push({ UID: uidStr, Decimal: decStr, Time: timestamp });
+  scanHistory.push({ UID: uidStr, Decimal: decStr+note, Time: timestamp });
+  historyList.scrollTop = 0;
 }
 
 clearHistoryBtn.addEventListener("click",()=>{
@@ -88,24 +92,19 @@ scanBtn.addEventListener("click", async ()=>{
 
     ndef.onreading = event=>{
       if(event.serialNumber){
-        const uidStr = event.serialNumber.toUpperCase();
-        let decValue = BigInt("0x"+uidStr).toString();
+        const uid = event.serialNumber.toUpperCase();
+        const decValue = BigInt("0x"+uid).toString();
         lastDecimal = decValue;
+        const { dec, note } = formatDecimal(decValue);
 
-        // Detect decimal length
-        let lengthNote = "";
-        if(decValue.length === 8) lengthNote = " (8-digit decimal)";
-        else if(decValue.length === 10) lengthNote = " (10-digit decimal)";
-
-        resultDiv.innerHTML = `<b>UID (Hex):</b> ${uidStr}<br/><b>Decimal:</b> ${decValue}${lengthNote}`;
+        resultDiv.innerHTML = `<b>UID (Hex):</b> ${uid}<br/><b>Decimal:</b> ${dec}${note}`;
         copyBtn.style.display = "inline-block";
-        addToHistory(uidStr, decValue);
+        addToHistory(uid, dec, note);
         setError("NFC tag read successfully.");
       } else {
         setError("This NFC tag cannot be read in a browser (no serialNumber).");
       }
     };
-
   } catch(err){
     setError("NFC Error: "+err.message+" (Ensure NFC is enabled and page is HTTPS).");
   }
@@ -114,15 +113,12 @@ scanBtn.addEventListener("click", async ()=>{
 // Export to CSV/Excel
 exportBtn.addEventListener("click", ()=>{
   if(scanHistory.length===0){ setError("No scan history to export."); return; }
-
   const headers = ["UID","Decimal","Time"];
   const csvRows = [headers.join(",")];
-
   scanHistory.forEach(row=>{
     const values = headers.map(h=>row[h]);
     csvRows.push(values.join(","));
   });
-
   const csvContent = csvRows.join("\n");
   const blob = new Blob([csvContent], {type:"text/csv"});
   const url = URL.createObjectURL(blob);
