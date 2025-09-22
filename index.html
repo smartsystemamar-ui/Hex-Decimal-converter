@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Hex to Decimal Auto NFC Converter</title>
+  <title>Access Card NFC to Decimal Converter</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 2em; background: #f4f4f9; }
     h1 { text-align: center; }
@@ -21,7 +21,7 @@
 </head>
 <body>
   <div class="container">
-    <h1>Hex to Decimal Auto NFC Converter</h1>
+    <h1>Access Card NFC to Decimal Converter</h1>
     <input type="text" id="hexInput" placeholder="Enter Hex or Decimal value"/>
     <button id="convertBtn">Convert</button>
     <button id="scanNFCBtn">Scan NFC</button>
@@ -45,9 +45,6 @@
     if(clearTimeoutId) { clearTimeout(clearTimeoutId); clearTimeoutId = null; }
   }
 
-  function isHex(str) { return /^[0-9a-fA-F]+$/.test(str); }
-  function isDecimal(str) { return /^[0-9]+$/.test(str); }
-
   function autoClear() {
     clearTimeoutId = setTimeout(() => {
       hexInput.value = "";
@@ -63,9 +60,21 @@
 
     try {
       let dec;
-      if (isHex(value)) dec = BigInt("0x" + value);
-      else if (isDecimal(value)) dec = BigInt(value);
-      else { setError("Invalid value."); return; }
+
+      // If value looks like hex
+      if (/^[0-9A-Fa-f]+$/.test(value)) {
+        dec = BigInt("0x" + value);
+      } 
+      // If value is decimal
+      else if (/^[0-9]+$/.test(value)) {
+        dec = BigInt(value);
+      } 
+      // If raw bytes (Akuvox 4–10 byte IDs)
+      else {
+        // Convert each char code to hex
+        const hexStr = Array.from(value).map(c => c.charCodeAt(0).toString(16).padStart(2,'0')).join('');
+        dec = BigInt("0x" + hexStr);
+      }
 
       let output = "Decimal: <b>" + dec.toString() + "</b>";
       const len = dec.toString().length;
@@ -119,28 +128,24 @@
             // Text record
             if (record.recordType === "text") {
               const decoder = new TextDecoder(record.encoding || "utf-8");
-              if (record.data instanceof DataView) {
-                dataStr = decoder.decode(record.data.buffer);
-              } else if (record.data instanceof ArrayBuffer) {
-                dataStr = decoder.decode(record.data);
-              } else if (typeof record.data === "string") {
-                dataStr = record.data;
-              }
+              if (record.data instanceof DataView) dataStr = decoder.decode(record.data.buffer);
+              else if (record.data instanceof ArrayBuffer) dataStr = decoder.decode(record.data);
+              else if (typeof record.data === "string") dataStr = record.data;
             } 
             // URL / MIME / Unknown
-            else if (["url", "mime", "unknown"].includes(record.recordType)) {
+            else if (["url","mime","unknown"].includes(record.recordType)) {
               let buffer;
               if (record.data instanceof DataView) buffer = record.data.buffer;
               else if (record.data instanceof ArrayBuffer) buffer = record.data;
               else continue;
 
               dataStr = Array.from(new Uint8Array(buffer))
-                             .map(b => b.toString(16).padStart(2,"0"))
+                             .map(b => b.toString(16).padStart(2,'0'))
                              .join("").toUpperCase();
             }
 
             // Filter non-hex/decimal characters
-            dataStr = dataStr.replace(/[^0-9A-Fa-f]/g, "");
+            dataStr = dataStr.replace(/[^0-9A-Fa-f]/g,"");
 
           } catch(e){
             console.error("Error decoding NFC record:", e);
@@ -152,7 +157,7 @@
           convertValue(dataStr);
           setError("NFC tag read and converted automatically.");
         } else {
-          setError("No usable hex or decimal data found in NFC tag.");
+          setError("No usable hex, decimal, or access card ID found in NFC tag.");
         }
       };
 
