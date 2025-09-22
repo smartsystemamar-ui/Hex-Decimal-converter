@@ -3,34 +3,50 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NFC UID Reader with Full History & Excel Export</title>
+<title>NFC UID Reader with Table History & Excel Export</title>
 <style>
 body { font-family: Arial, sans-serif; margin: 2em; background: #f4f4f9; }
-.container { max-width: 700px; margin: auto; padding: 20px; background: #fff; border-radius: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
-button { padding: 10px 20px; margin: 10px 5px 0 0; font-size: 1em; border-radius: 8px; border: none; cursor: pointer; }
+.container { max-width: 800px; margin: auto; padding: 20px; background: #fff; border-radius: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
+h1 { text-align: center; }
+button { padding: 10px 20px; margin: 5px; font-size: 1em; border-radius: 8px; border: none; cursor: pointer; }
 #scanNFCBtn { background: #28a745; color: white; }
 #copyBtn { background: #ffc107; color: black; display: none; }
 #exportBtn { background: #6f42c1; color: white; }
-#result, #history { margin-top: 15px; padding: 10px; background: #eef; border-radius: 8px; word-break: break-word; }
+#clearHistoryBtn { background: #dc3545; color: white; }
+#result { margin-top: 15px; padding: 10px; background: #eef; border-radius: 8px; word-break: break-word; }
 #error { color: red; margin-top: 10px; word-break: break-word; }
-#history h2 { margin-top: 0; }
-#historyList { max-height: 300px; overflow-y: auto; }
-.history-entry { margin-bottom: 8px; padding: 6px; border-bottom: 1px solid #ccc; font-size: 0.95em; }
+#historyTable { width: 100%; border-collapse: collapse; margin-top: 15px; }
+#historyTable th, #historyTable td { border: 1px solid #ccc; padding: 6px 10px; text-align: center; }
+#historyTable th { background-color: #007BFF; color: white; }
+#historyContainer { max-height: 300px; overflow-y: auto; margin-top: 10px; }
 </style>
 </head>
 <body>
 <div class="container">
-<h1>NFC UID Reader with Full History</h1>
-<button id="scanNFCBtn">Scan NFC Tag</button>
-<button id="copyBtn">Copy Decimal</button>
-<button id="exportBtn">Export History to Excel</button>
+<h1>NFC UID Reader</h1>
+
+<div>
+  <button id="scanNFCBtn">Scan NFC Tag</button>
+  <button id="copyBtn">Copy Decimal</button>
+  <button id="exportBtn">Export History to Excel</button>
+  <button id="clearHistoryBtn">Clear History</button>
+</div>
+
 <div id="result"></div>
 <div id="error"></div>
 
-<div id="history">
-<h2>Scan History</h2>
-<div id="historyList"></div>
-<button id="clearHistoryBtn">Clear History</button>
+<div id="historyContainer">
+<table id="historyTable">
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>UID (Hex)</th>
+      <th>Decimal</th>
+      <th>Time</th>
+    </tr>
+  </thead>
+  <tbody id="historyBody"></tbody>
+</table>
 </div>
 </div>
 
@@ -40,8 +56,8 @@ const resultDiv = document.getElementById('result');
 const errorDiv = document.getElementById('error');
 const copyBtn = document.getElementById('copyBtn');
 const exportBtn = document.getElementById('exportBtn');
-const historyList = document.getElementById('historyList');
 const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+const historyBody = document.getElementById('historyBody');
 
 let scanHistory = [];
 let lastDecimal = "";
@@ -57,25 +73,27 @@ function formatDecimal(decimalStr){
   return { dec: decimalStr, note: note };
 }
 
-function addToHistory(uidStr, decStr, note){
+function addToHistory(uid, dec, note){
   const now = new Date();
   const timestamp = now.toLocaleTimeString();
-  const entryDiv = document.createElement("div");
-  entryDiv.className = "history-entry";
-  entryDiv.innerHTML = `<b>UID (Hex):</b> ${uidStr} &nbsp; | &nbsp; <b>Decimal:</b> ${decStr}${note} &nbsp; | &nbsp; <b>Time:</b> ${timestamp}`;
-  historyList.prepend(entryDiv);
-  scanHistory.push({ UID: uidStr, Decimal: decStr+note, Time: timestamp });
-  historyList.scrollTop = 0;
+  const index = scanHistory.length + 1;
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td>${index}</td><td>${uid}</td><td>${dec}${note}</td><td>${timestamp}</td>`;
+  historyBody.prepend(tr);
+  scanHistory.push({ UID: uid, Decimal: dec+note, Time: timestamp });
 }
 
-clearHistoryBtn.addEventListener("click",()=>{
-  historyList.innerHTML=""; scanHistory=[]; clearResult();
+clearHistoryBtn.addEventListener("click", ()=>{
+  historyBody.innerHTML = "";
+  scanHistory = [];
+  clearResult();
 });
 
 copyBtn.addEventListener("click", ()=>{
   if(lastDecimal){
-    navigator.clipboard.writeText(lastDecimal).then(()=>{ setError("Decimal copied!"); })
-    .catch(err=>setError("Copy failed: "+err));
+    navigator.clipboard.writeText(lastDecimal)
+      .then(()=>setError("Decimal copied!"))
+      .catch(err=>setError("Copy failed: "+err));
   }
 });
 
