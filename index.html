@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Hex to Decimal Converter + NFC</title>
+  <title>Hex to Decimal Auto NFC Converter</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 2em; background: #f4f4f9; }
     h1 { text-align: center; }
@@ -14,16 +14,18 @@
              border-radius: 8px; border: none; cursor: pointer; }
     #convertBtn { background: #007BFF; color: white; }
     #scanNFCBtn { background: #28a745; color: white; }
-    #result { margin-top: 15px; padding: 10px; background: #eef; border-radius: 8px; }
-    #error { color: red; margin-top: 10px; }
+    #copyBtn { background: #ffc107; color: black; display: none; }
+    #result { margin-top: 15px; padding: 10px; background: #eef; border-radius: 8px; word-break: break-word; }
+    #error { color: red; margin-top: 10px; word-break: break-word; }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>Hex to Decimal Converter</h1>
-    <input type="text" id="hexInput" placeholder="Enter Hex value (e.g. 1A2B3C)"/>
+    <h1>Hex to Decimal Auto NFC Converter</h1>
+    <input type="text" id="hexInput" placeholder="Enter Hex or Decimal value"/>
     <button id="convertBtn">Convert</button>
     <button id="scanNFCBtn">Scan NFC</button>
+    <button id="copyBtn">Copy Decimal</button>
     <div id="result"></div>
     <div id="error"></div>
   </div>
@@ -32,60 +34,103 @@
   const hexInput = document.getElementById('hexInput');
   const resultDiv = document.getElementById('result');
   const errorDiv = document.getElementById('error');
+  const copyBtn = document.getElementById('copyBtn');
 
   function setError(msg) { errorDiv.textContent = msg; }
+  function clearResult() { resultDiv.innerHTML = ""; copyBtn.style.display = "none"; }
 
-  function convert() {
-    const hex = hexInput.value.trim();
-    if (!hex) { setError("Please enter a hex value."); return; }
+  function isHex(str) { return /^[0-9a-fA-F]+$/.test(str); }
+  function isDecimal(str) { return /^[0-9]+$/.test(str); }
+
+  function convertValue(value) {
+    clearResult();
+    value = value.trim();
+    if (!value) { setError("No value to convert."); return; }
+
     try {
-      const dec = BigInt("0x" + hex);
-      resultDiv.innerHTML = "Decimal: <b>" + dec.toString() + "</b>";
-      if (dec.toString().length === 8) {
-        resultDiv.innerHTML += "<br/>This is an <b>8-digit</b> decimal.";
-      } else if (dec.toString().length === 10) {
-        resultDiv.innerHTML += "<br/>This is a <b>10-digit</b> decimal.";
-      }
+      let dec;
+      if (isHex(value)) dec = BigInt("0x" + value);
+      else if (isDecimal(value)) dec = BigInt(value);
+      else { setError("Invalid value."); return; }
+
+      let output = "Decimal: <b>" + dec.toString() + "</b>";
+      const len = dec.toString().length;
+      if (len === 8) output += "<br/>This is an <b>8-digit</b> decimal.";
+      else if (len === 10) output += "<br/>This is a <b>10-digit</b> decimal.";
+
+      resultDiv.innerHTML = output;
+      copyBtn.style.display = "inline-block";
       setError("");
     } catch (err) {
-      setError("Invalid hex input.");
+      setError("Conversion error: " + err.message);
     }
   }
 
-  document.getElementById("convertBtn").addEventListener("click", convert);
+  document.getElementById("convertBtn").addEventListener("click", () => convertValue(hexInput.value));
 
-  // NFC Integration (extended for text, URL, MIME)
+  copyBtn.addEventListener("click", () => {
+    if (resultDiv.textContent) {
+      const decimalValue = resultDiv.textContent.match(/\d+/)[0];
+      navigator.clipboard.writeText(decimalValue).then(() => {
+        setError("Decimal copied to clipboard!");
+      }).catch(err => {
+        setError("Failed to copy: " + err);
+      });
+    }
+  });
+
   async function startNFC() {
+    clearResult();
+    setError("");
+
     if (!("NDEFReader" in window)) {
       setError("Web NFC not supported on this device/browser.");
       return;
     }
+
     try {
       const ndef = new NDEFReader();
       await ndef.scan();
       setError("Hold an NFC tag near your device...");
 
+      ndef.onreadingerror = () => setError("Failed to read NFC tag.");
+
       ndef.onreading = event => {
-        let hexData = "";
+        let dataStr = "";
+
         for (const record of event.message.records) {
-          if (record.recordType === "text") {
-            hexData = new TextDecoder().decode(record.data);
-          } else if (record.recordType === "url" || record.recordType === "mime" || record.recordType === "unknown") {
-            hexData = Array.from(new Uint8Array(record.data))
-              .map(b => b.toString(16).padStart(2,"0"))
-              .join("").toUpperCase();
+          try {
+            switch (record.recordType) {
+              case "text":
+                const textDecoder = new TextDecoder(record.encoding || "utf-8");
+                dataStr = textDecoder.decode(record.data);
+                break;
+              case "url":
+              case "mime":
+              case "unknown":
+                if(record.data instanceof ArrayBuffer){
+                  dataStr = Array.from(new Uint8Array(record.data))
+                                .map(b => b.toString(16).padStart(2,"0"))
+                                .join("").toUpperCase();
+                }
+                break;
+            }
+          } catch(e){
+            console.error("Error decoding NFC record:", e);
           }
         }
-        if(hexData){
-          hexInput.value = hexData;
-          convert();
-          setError("NFC tag read successfully.");
+
+        if(dataStr){
+          hexInput.value = dataStr.trim();
+          convertValue(dataStr);
+          setError("NFC tag read and converted automatically.");
         } else {
-          setError("No usable hex data found in NFC tag.");
+          setError("No usable hex or decimal data found in NFC tag.");
         }
       };
+
     } catch (err) {
-      setError("NFC Error: " + err.message);
+      setError("NFC Error: " + err.message + " (Ensure NFC is enabled and page is HTTPS).");
     }
   }
 
