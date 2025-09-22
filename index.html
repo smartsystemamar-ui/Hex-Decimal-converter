@@ -36,11 +36,25 @@
   const errorDiv = document.getElementById('error');
   const copyBtn = document.getElementById('copyBtn');
 
+  let clearTimeoutId = null;
+
   function setError(msg) { errorDiv.textContent = msg; }
-  function clearResult() { resultDiv.innerHTML = ""; copyBtn.style.display = "none"; }
+  function clearResult() { 
+    resultDiv.innerHTML = ""; 
+    copyBtn.style.display = "none"; 
+    if(clearTimeoutId) { clearTimeout(clearTimeoutId); clearTimeoutId = null; }
+  }
 
   function isHex(str) { return /^[0-9a-fA-F]+$/.test(str); }
   function isDecimal(str) { return /^[0-9]+$/.test(str); }
+
+  function autoClear() {
+    clearTimeoutId = setTimeout(() => {
+      hexInput.value = "";
+      clearResult();
+      setError("");
+    }, 5000); // 5 seconds
+  }
 
   function convertValue(value) {
     clearResult();
@@ -61,6 +75,7 @@
       resultDiv.innerHTML = output;
       copyBtn.style.display = "inline-block";
       setError("");
+      autoClear();
     } catch (err) {
       setError("Conversion error: " + err.message);
     }
@@ -73,6 +88,7 @@
       const decimalValue = resultDiv.textContent.match(/\d+/)[0];
       navigator.clipboard.writeText(decimalValue).then(() => {
         setError("Decimal copied to clipboard!");
+        autoClear();
       }).catch(err => {
         setError("Failed to copy: " + err);
       });
