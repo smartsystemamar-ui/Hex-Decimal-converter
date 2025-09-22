@@ -34,6 +34,7 @@
     <div id="history">
       <h2>Scan History</h2>
       <div id="historyList"></div>
+      <button id="clearHistoryBtn">Clear History</button>
     </div>
   </div>
 
@@ -43,6 +44,7 @@
   const errorDiv = document.getElementById('error');
   const copyBtn = document.getElementById('copyBtn');
   const historyList = document.getElementById('historyList');
+  const clearHistoryBtn = document.getElementById('clearHistoryBtn');
 
   let clearTimeoutId = null;
 
@@ -74,6 +76,10 @@
     historyList.prepend(entryDiv);
   }
 
+  clearHistoryBtn.addEventListener("click", () => {
+    historyList.innerHTML = "";
+  });
+
   function convertValue(value) {
     clearResult();
     value = value.trim();
@@ -83,18 +89,13 @@
       let dec;
       let hexStr;
 
-      // Hex input
       if (/^[0-9A-Fa-f]+$/.test(value)) {
         hexStr = value.toUpperCase();
         dec = BigInt("0x" + value);
-      } 
-      // Decimal input
-      else if (/^[0-9]+$/.test(value)) {
+      } else if (/^[0-9]+$/.test(value)) {
         dec = BigInt(value);
         hexStr = dec.toString(16).toUpperCase();
-      } 
-      // Raw bytes (access cards)
-      else {
+      } else {
         hexStr = Array.from(value)
                        .map(c => c.charCodeAt(0).toString(16).padStart(2,'0'))
                        .join("").toUpperCase();
@@ -102,13 +103,12 @@
       }
 
       let decStr = dec.toString();
-      decStr = formatTo10Digits(decStr); // force 10 digits
+      decStr = formatTo10Digits(decStr);
 
-      let output = "Hex: <b>" + hexStr + "</b><br/>Decimal (10-digit): <b>" + decStr + "</b>";
-      resultDiv.innerHTML = output;
+      resultDiv.innerHTML = `Hex: <b>${hexStr}</b><br/>Decimal (10-digit): <b>${decStr}</b>`;
       copyBtn.style.display = "inline-block";
 
-      addToHistory(hexStr, decStr); // add to history
+      addToHistory(hexStr, decStr);
 
       setError("");
       autoClear();
@@ -148,41 +148,44 @@
       ndef.onreadingerror = () => setError("Failed to read NFC tag.");
 
       ndef.onreading = event => {
-        let dataStr = "";
+        let hexStr = "";
 
-        for (const record of event.message.records) {
-          try {
-            // Text record
-            if (record.recordType === "text") {
-              const decoder = new TextDecoder(record.encoding || "utf-8");
-              if (record.data instanceof DataView) dataStr = decoder.decode(record.data.buffer);
-              else if (record.data instanceof ArrayBuffer) dataStr = decoder.decode(record.data);
-              else if (typeof record.data === "string") dataStr = record.data;
-            } 
-            // URL / MIME / Unknown
-            else if (["url","mime","unknown"].includes(record.recordType)) {
-              let buffer;
-              if (record.data instanceof DataView) buffer = record.data.buffer;
-              else if (record.data instanceof ArrayBuffer) buffer = record.data;
-              else continue;
+        // 1️⃣ First, check event.serialNumber (most reliable for access cards)
+        if(event.serialNumber) {
+          hexStr = event.serialNumber.toUpperCase();
+        } else {
+          // 2️⃣ Fallback: read all records
+          for (const record of event.message.records) {
+            try {
+              if(!record.data) continue;
 
-              dataStr = Array.from(new Uint8Array(buffer))
-                             .map(b => b.toString(16).padStart(2,'0'))
-                             .join("").toUpperCase();
+              if (record.recordType === "text") {
+                const decoder = new TextDecoder(record.encoding || "utf-8");
+                if (record.data instanceof DataView) hexStr = decoder.decode(record.data.buffer);
+                else if (record.data instanceof ArrayBuffer) hexStr = decoder.decode(record.data);
+                else if (typeof record.data === "string") hexStr = record.data;
+              } else {
+                let buffer;
+                if (record.data instanceof DataView) buffer = record.data.buffer;
+                else if (record.data instanceof ArrayBuffer) buffer = record.data;
+                else continue;
+                hexStr = Array.from(new Uint8Array(buffer))
+                               .map(b => b.toString(16).padStart(2,'0'))
+                               .join("").toUpperCase();
+              }
+
+              hexStr = hexStr.replace(/[^0-9A-F]/g,"");
+
+            } catch(e){
+              console.error("Error decoding NFC record:", e);
             }
-
-            // Filter non-hex/decimal
-            dataStr = dataStr.replace(/[^0-9A-Fa-f]/g,"");
-
-          } catch(e){
-            console.error("Error decoding NFC record:", e);
           }
         }
 
-        if(dataStr.length > 0) {
-          hexInput.value = dataStr;
-          convertValue(dataStr);
-          setError("NFC tag read and converted automatically.");
+        if(hexStr.length > 0){
+          hexInput.value = hexStr;
+          convertValue(hexStr);
+          setError("NFC tag read successfully.");
         } else {
           setError("No usable hex, decimal, or access card ID found in NFC tag.");
         }
