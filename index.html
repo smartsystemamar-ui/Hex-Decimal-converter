@@ -131,6 +131,11 @@
     }
   });
 
+  function bytesToHex(buffer) {
+    const u8 = new Uint8Array(buffer);
+    return Array.from(u8).map(b => b.toString(16).padStart(2,'0')).join('').toUpperCase();
+  }
+
   async function startNFC() {
     clearResult();
     setError("");
@@ -150,28 +155,17 @@
       ndef.onreading = event => {
         let hexStr = "";
 
-        // 1️⃣ First, check event.serialNumber (most reliable for access cards)
+        // 1️⃣ Use serialNumber first (clean card ID)
         if(event.serialNumber) {
           hexStr = event.serialNumber.toUpperCase();
         } else {
-          // 2️⃣ Fallback: read all records
+          // 2️⃣ Fallback: read record data as raw bytes
           for (const record of event.message.records) {
             try {
               if(!record.data) continue;
 
-              if (record.recordType === "text") {
-                const decoder = new TextDecoder(record.encoding || "utf-8");
-                if (record.data instanceof DataView) hexStr = decoder.decode(record.data.buffer);
-                else if (record.data instanceof ArrayBuffer) hexStr = decoder.decode(record.data);
-                else if (typeof record.data === "string") hexStr = record.data;
-              } else {
-                let buffer;
-                if (record.data instanceof DataView) buffer = record.data.buffer;
-                else if (record.data instanceof ArrayBuffer) buffer = record.data;
-                else continue;
-                hexStr = Array.from(new Uint8Array(buffer))
-                               .map(b => b.toString(16).padStart(2,'0'))
-                               .join("").toUpperCase();
+              if (record.data instanceof ArrayBuffer || record.data instanceof DataView) {
+                hexStr = bytesToHex(record.data);
               }
 
               hexStr = hexStr.replace(/[^0-9A-F]/g,"");
