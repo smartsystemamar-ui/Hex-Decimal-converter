@@ -63,7 +63,7 @@
     try {
       const ndef = new NDEFReader();
       await ndef.scan();
-      setError("Hold an NFC tag near your device...");
+      setError("Hold an NFC tag near your device....");
 
       ndef.onreading = event => {
         let hexData = "";
